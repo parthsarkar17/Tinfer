@@ -2,6 +2,7 @@ mod constructs;
 use crate::constructs::machinery::{generate_constraints, Exp, InScope, Type, TypeContext};
 
 fn main() {
+    // fun x y -> x + y
     let _exp1 = Exp::Abs(
         'x',
         Type::Abstract(0),
@@ -12,6 +13,7 @@ fn main() {
         )),
     );
 
+    // fun x y -> x (y x) (5110)
     let _exp2 = Exp::Abs(
         'x',
         Type::Abstract(0),
