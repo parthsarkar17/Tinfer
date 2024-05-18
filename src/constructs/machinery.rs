@@ -11,6 +11,68 @@ pub enum Exp {
     _Unit,
 }
 
+impl Exp {
+    pub fn generate_constraints(
+        &self,
+        delta: &InScope,
+        gamma: &TypeContext,
+    ) -> (InScope, Type, Constraints) {
+        match self {
+            Self::Abs(c, tau, exp) => {
+                let new_in_scope = InScope::refresh(delta, tau);
+                let (types_in_scope, subexp_type, subexp_cons) = exp
+                    .as_ref()
+                    .generate_constraints(&new_in_scope, &TypeContext::add_binding(gamma, c, tau));
+
+                (
+                    types_in_scope,
+                    Type::Function(Box::new(tau.clone()), Box::new(subexp_type)),
+                    subexp_cons,
+                )
+            }
+            Self::App(e1, e2) => {
+                let (s1, t1, c1) = e1.as_ref().generate_constraints(delta, gamma);
+                let (s2, t2, c2) = e2.as_ref().generate_constraints(&s1, gamma);
+                let fresh_var = Type::fresh(&s2);
+
+                let application_constraints = Constraints {
+                    constraints: HashSet::from([Constraint::Equality(
+                        t1,
+                        Type::Function(Box::new(t2), Box::new(fresh_var.clone())),
+                    )]),
+                };
+                let c = Constraints::union(&Constraints::union(&c1, &c2), &application_constraints);
+
+                (s2.refresh(&fresh_var), fresh_var, c)
+            }
+            Self::Plus(e1, e2) => {
+                let (s1, t1, c1) = e1.as_ref().generate_constraints(delta, gamma);
+                let (s2, t2, c2) = e2.as_ref().generate_constraints(&s1, gamma);
+                let addition_constraints = Constraints {
+                    constraints: HashSet::from([
+                        Constraint::Equality(t1.clone(), Type::Int),
+                        Constraint::Equality(t2.clone(), Type::Int),
+                    ]),
+                };
+
+                (
+                    s2,
+                    Type::Int,
+                    Constraints::union(&Constraints::union(&c1, &c2), &addition_constraints),
+                )
+            }
+            Self::Var(c) => {
+                let tau = gamma
+                    .search_binding(c)
+                    .expect("Type variable has no mapping in the context");
+                (delta.clone(), tau.clone(), Constraints::new())
+            }
+            Self::Int(..) => (delta.clone(), Type::Int, Constraints::new()),
+            Self::_Unit => (delta.clone(), Type::Unit, Constraints::new()),
+        }
+    }
+}
+
 #[derive(Eq, Hash, PartialEq, Clone)]
 pub enum Type {
     Int,
@@ -150,67 +212,5 @@ impl fmt::Display for Constraints {
                 format!("{acc}{constraint} ")
             });
         write!(f, "{constraints_string}")
-    }
-}
-
-pub fn generate_constraints(
-    delta: &InScope,
-    gamma: &TypeContext,
-    exp: &Exp,
-) -> (InScope, Type, Constraints) {
-    match exp {
-        Exp::Abs(c, tau, exp) => {
-            let new_in_scope = InScope::refresh(delta, tau);
-            let (types_in_scope, subexp_type, subexp_cons) = generate_constraints(
-                &new_in_scope,
-                &TypeContext::add_binding(gamma, c, tau),
-                exp.as_ref(),
-            );
-
-            (
-                types_in_scope,
-                Type::Function(Box::new(tau.clone()), Box::new(subexp_type)),
-                subexp_cons,
-            )
-        }
-        Exp::App(e1, e2) => {
-            let (s1, t1, c1) = generate_constraints(delta, gamma, e1.as_ref());
-            let (s2, t2, c2) = generate_constraints(&s1, gamma, e2.as_ref());
-            let fresh_var = Type::fresh(&s2);
-
-            let application_constraints = Constraints {
-                constraints: HashSet::from([Constraint::Equality(
-                    t1,
-                    Type::Function(Box::new(t2), Box::new(fresh_var.clone())),
-                )]),
-            };
-            let c = Constraints::union(&Constraints::union(&c1, &c2), &application_constraints);
-
-            (s2.refresh(&fresh_var), fresh_var, c)
-        }
-        Exp::Plus(e1, e2) => {
-            let (s1, t1, c1) = generate_constraints(delta, gamma, e1.as_ref());
-            let (s2, t2, c2) = generate_constraints(&s1, gamma, e2.as_ref());
-            let addition_constraints = Constraints {
-                constraints: HashSet::from([
-                    Constraint::Equality(t1.clone(), Type::Int),
-                    Constraint::Equality(t2.clone(), Type::Int),
-                ]),
-            };
-
-            (
-                s2,
-                Type::Int,
-                Constraints::union(&Constraints::union(&c1, &c2), &addition_constraints),
-            )
-        }
-        Exp::Var(c) => {
-            let tau = gamma
-                .search_binding(c)
-                .expect("Type variable has no mapping in the context");
-            (delta.clone(), tau.clone(), Constraints::new())
-        }
-        Exp::Int(..) => (delta.clone(), Type::Int, Constraints::new()),
-        Exp::_Unit => (delta.clone(), Type::Unit, Constraints::new()),
     }
 }

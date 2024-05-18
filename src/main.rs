@@ -1,5 +1,5 @@
 mod constructs;
-use crate::constructs::machinery::{generate_constraints, Exp, InScope, Type, TypeContext};
+use crate::constructs::machinery::{Exp, InScope, Type, TypeContext};
 
 fn main() {
     // fun x y -> x + y
@@ -43,7 +43,7 @@ fn main() {
         )),
     );
 
-    let (_, t, c) = generate_constraints(&InScope::new(), &TypeContext::new(), &_exp2);
+    let (_, t, c) = (&_exp2).generate_constraints(&InScope::new(), &TypeContext::new());
     println!("type: {t}");
     println!("constraints: {c}");
 }
